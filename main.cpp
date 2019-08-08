@@ -194,7 +194,8 @@ class TriangleApp {
     device_create_info.pQueueCreateInfos = create_infos.data();
     device_create_info.queueCreateInfoCount = static_cast<uint32_t>(create_infos.size());
     device_create_info.pEnabledFeatures = &device_features; 
-    device_create_info.enabledExtensionCount = 0;
+    device_create_info.enabledExtensionCount = static_cast<uint32_t>(extensions_.size());
+    device_create_info.ppEnabledExtensionNames = extensions_.data();
     device_create_info.enabledLayerCount = 0;
 
 
