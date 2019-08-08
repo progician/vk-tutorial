@@ -231,7 +231,6 @@ public:
   }
 
   auto execute() -> int {
-    std::cout << VulkanExtensions();
     while(!glfwWindowShouldClose(window_)) {
       glfwPollEvents();
     }
