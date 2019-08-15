@@ -396,6 +396,7 @@ public:
     create_surface();
     pick_physical_device();
     create_logical_device();
+    create_swapchain();
     create_image_views();
   }
 
