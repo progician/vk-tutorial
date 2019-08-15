@@ -58,7 +58,12 @@ class TriangleApp {
 
   VkQueue graphics_;
   VkQueue present_;
+
   VkSwapchainKHR swapchain_;
+  VkFormat format_;
+  VkExtent2D extent_;
+  std::vector<VkImage> swapchain_images_;
+  std::vector<VkImageView> swapchain_image_views_;
 
 
   auto find_queue_families(VkPhysicalDevice device) const -> QueueFamilyIndices {
@@ -342,6 +347,41 @@ class TriangleApp {
     if (vkCreateSwapchainKHR(device_, &swapchain_create_info, nullptr, &swapchain_) != VK_SUCCESS) {
       throw std::runtime_error("failed to create swapchain!");
     }
+
+    auto swapchain_image_count = 0u;
+    vkGetSwapchainImagesKHR(device_, swapchain_, &swapchain_image_count, nullptr);
+    swapchain_images_.resize(swapchain_image_count);
+    vkGetSwapchainImagesKHR(device_, swapchain_, &swapchain_image_count, swapchain_images_.data());
+
+    format_ = surface_format.format;
+    extent_ = extent;
+  }
+
+
+  void create_image_views() {
+    swapchain_image_views_.resize(swapchain_images_.size());
+    for (auto i = 0U; i < swapchain_images_.size(); i++) {
+      auto create_info = VkImageViewCreateInfo{};
+      create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+      create_info.image = swapchain_images_[i];
+      create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+      create_info.format = format_;
+
+      create_info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+      create_info.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+      create_info.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+      create_info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+
+      create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+      create_info.subresourceRange.baseMipLevel = 0;
+      create_info.subresourceRange.levelCount = 1;
+      create_info.subresourceRange.baseArrayLayer = 0;
+      create_info.subresourceRange.layerCount = 1;
+
+      if (vkCreateImageView(device_, &create_info, nullptr, &swapchain_image_views_[i]) != VK_SUCCESS) {
+        throw std::runtime_error("couldn't create image views!");
+      }
+    }
   }
 
 
@@ -356,10 +396,15 @@ public:
     create_surface();
     pick_physical_device();
     create_logical_device();
+    create_image_views();
   }
 
 
   ~TriangleApp() {
+    for (auto image_view : swapchain_image_views_) {
+      vkDestroyImageView(device_, image_view, nullptr);
+    }
+
     vkDestroySwapchainKHR(device_, swapchain_, nullptr);
     vkDestroyDevice(device_, nullptr);
     vkDestroySurfaceKHR(instance_, surface_, nullptr);
