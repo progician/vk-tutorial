@@ -1,6 +1,7 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
+#include <fstream>
 #include <iostream>
 #include <optional>
 #include <set>
@@ -47,6 +48,23 @@ struct SwapChainSupport {
 
 static auto const Width = 800u;
 static auto const Height = 600u;
+
+using BinaryBlock = std::vector<char>;
+auto read_entire_file(std::string const& file_name) -> BinaryBlock {
+  auto file = std::ifstream(file_name, std::ios::ate | std::ios::binary);
+  if (!file.is_open()) {
+    throw std::runtime_error{"failed to open file!"};
+  }
+
+  auto size = size_t(file.tellg());
+  auto buffer = BinaryBlock(size);
+
+  file.seekg(0);
+  file.read(buffer.data(), size);
+  file.close();
+
+  return buffer;
+}
 
 
 class TriangleApp {
@@ -384,6 +402,85 @@ class TriangleApp {
     }
   }
 
+  auto shader_module_from(BinaryBlock const& code) -> VkShaderModule {
+    auto create_info = VkShaderModuleCreateInfo{};
+    create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    create_info.codeSize = code.size();
+    create_info.pCode = reinterpret_cast<uint32_t const*>(code.data());
+
+    VkShaderModule result;
+    if (vkCreateShaderModule(device_, &create_info, nullptr, &result) != VK_SUCCESS) {
+      throw std::runtime_error("couldn't create shader module");
+    }
+
+    return result;
+  }
+
+  void create_graphics_pipeline() {
+    auto vertex_shader_code = read_entire_file("vert.spv");
+    auto fragment_shader_code = read_entire_file("frag.spv");
+
+    auto vertex_shader_module = shader_module_from(vertex_shader_code);
+    auto fragment_shader_module = shader_module_from(fragment_shader_code);
+
+    auto vertex_shader_stage_info = VkPipelineShaderStageCreateInfo{};
+    vertex_shader_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    vertex_shader_stage_info.stage = VK_SHADER_STAGE_VERTEX_BIT;
+    vertex_shader_stage_info.pName = "main";
+
+    auto fragment_shader_stage_info = VkPipelineShaderStageCreateInfo{};
+    fragment_shader_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    fragment_shader_stage_info.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    fragment_shader_stage_info.pName = "main";
+
+    VkPipelineShaderStageCreateInfo shader_stages[] = {
+      vertex_shader_stage_info,
+      fragment_shader_stage_info
+    };
+
+    auto vertex_input_info = VkPipelineVertexInputStateCreateInfo{}; 
+    vertex_input_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertex_input_info.vertexBindingDescriptionCount = 0;
+    vertex_input_info.vertexAttributeDescriptionCount = 0;
+
+    auto input_assembly_info = VkPipelineInputAssemblyStateCreateInfo{};
+    input_assembly_info.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    input_assembly_info.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    input_assembly_info.primitiveRestartEnable = VK_FALSE;
+
+    auto viewport = VkViewport{};
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width = float(extent_.width);
+    viewport.height = float(extent_.height);
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+
+    auto scissor = VkRect2D{};
+    scissor.offset = {0, 0};
+    scissor.extent = extent_;
+
+    auto viewport_state = VkPipelineViewportStateCreateInfo{};
+    viewport_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    viewport_state.viewportCount = 1;
+    viewport_state.pViewports = &viewport;
+    viewport_state.scissorCount = 1;
+    viewport_state.pScissors = &scissor;
+
+    auto rasterizer = VkPipelineRasterizationStateCreateInfo{};
+    rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    rasterizer.depthClampEnable = VK_FALSE;
+    rasterizer.rasterizerDiscardEnable = VK_FALSE;
+    rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+    rasterizer.lineWidth = 1.0f;
+    rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+    rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+    rasterizer.depthBiasEnable = VK_FALSE;
+
+    vkDestroyShaderModule(device_, fragment_shader_module, nullptr);
+    vkDestroyShaderModule(device_, vertex_shader_module, nullptr);
+  }
+
 
 public:
   TriangleApp(int, char const*[]) {
@@ -398,6 +495,7 @@ public:
     create_logical_device();
     create_swapchain();
     create_image_views();
+    create_graphics_pipeline();
   }
 
 
